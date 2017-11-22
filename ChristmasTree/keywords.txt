@@ -1,0 +1,4 @@
+ChristmasTree	KEYWORD1
+Run	KEYWORD2
+WasTouched	KEYWORD2
+GetRandomMode	KEYWORD2

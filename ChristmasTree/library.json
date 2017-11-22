@@ -1,0 +1,16 @@
+{
+  "name": "ChristmasTree",
+  "keywords": "Christmas LED tree",
+  "description": "Easy-to-use library for controlling an LED christmas tree",
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/DRAMCO/PCB-Christmas-Tree.git"
+  },
+  "frameworks": "arduino",
+  "platforms":
+  [
+    "atmelavr",
+    "teensy"
+  ]
+}

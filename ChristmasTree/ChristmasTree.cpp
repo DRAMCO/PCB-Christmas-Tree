@@ -1,30 +1,7 @@
-/*
-The MIT License (MIT)
+#include "ChristmasTree.h"
+#include "AnalogTouch.h"
 
-Copyright (c) 2015 Balint Balazs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
-
-#include <AnalogTouch.h>
-#include <TimerOne.h>
-
+#define offset 1
 
 const int NR_ANODE = 3;
 const int NR_CATHODE = 8;
@@ -46,13 +23,10 @@ long int N,n = 0;
 int M,m = 0;
 unsigned long int then = 0, now = 0;
 
-
+static int i = 0;
 int rem = 0;
 
 const byte NR_STATE = 11;
-volatile byte state = 1;
-volatile byte nextState = NR_STATE;
-volatile byte prevState = 1;
 
 volatile unsigned long int lastTouch = 0;
 const unsigned long int touchDelay = 500; // times 100 ms
@@ -72,9 +46,45 @@ int randoms[NR_ANODE][NR_CATHODE] = { { 0, 0, 0, 0, 0, 0, 0, 0 },
 int randomChanged[NR_ANODE][NR_CATHODE] = { { 0, 0, 0, 0, 0, 0, 0, 0 },
                                             { 0, 0, 0, 0, 0, 0, 0, 0 },
                                             { 0, 0, 0, 0, 0, 0, 0, 0 } };
-int randomBuffer = 0;
-    
-inline void zero(byte _nextState) {
+
+uint8_t getTouch() {
+  long unsigned int _now = millis();
+  if (_now > lastTouch + touchDelay) {
+    uint16_t value = analogTouchRead(A0);
+
+    // Self calibrate - from the AnalogTouch example
+    static uint16_t ref = 0xFFFF;
+    if (value < (ref >> offset))
+      ref = (value << offset);
+    // Cool down
+    else if (value >(ref >> offset))
+      ref++;
+
+    bool touched = (value - (ref >> offset)) > 40;
+    if (touched) {
+      if (hold) {
+        if (_now > hold + 3000) {
+          hold = _now;
+          lastChange = _now;
+          return 3;
+        }
+      }
+      else {
+        lastTouch = millis();
+        lastChange = lastTouch;
+        hold = lastChange;
+        return 2;
+      }
+    }
+    else {
+      hold = 0;
+      return 0;
+    }
+  }
+  return 0;
+}
+
+inline void zero() {
     for (size_t j = 0; j < NR_ANODE; j++)
     {
         for (size_t k = 0; k < NR_CATHODE; k++)
@@ -83,7 +93,6 @@ inline void zero(byte _nextState) {
         }
     }
     N = 0;
-    state = _nextState;
 }
 
 
@@ -354,7 +363,7 @@ inline void randFade() {
                 else {
                     val[j][k] = randoms[j][k] * 50;
                 }
-                    
+
             }
         }
         then = now;
@@ -362,7 +371,7 @@ inline void randFade() {
     }
 }
 
-inline void max_power() {
+/*inline void max_power() {
     if (now > then + 10) {
         for (size_t j = 0; j < NR_ANODE; j++)
         {
@@ -373,7 +382,7 @@ inline void max_power() {
         }
         then = now;
     }
-}
+}*/
 
 
 inline void rest() {
@@ -384,60 +393,70 @@ inline void rest() {
     }
 }
 
-// Slow down the automatic calibration cooldown
-#define offset 1
-#if offset > 6
-#error "Too big offset value"
-#endif
-
-void getTouch() {
-    long int _now = millis();
-    if (_now > lastTouch + touchDelay) {
-        uint16_t value = analogTouchRead(A0);
-
-        // Self calibrate - from the AnalogTouch example
-        static uint16_t ref = 0xFFFF;
-        if (value < (ref >> offset))
-            ref = (value << offset);
-        // Cool down
-        else if (value >(ref >> offset))
-            ref++;
-
-        bool touched = (value - (ref >> offset)) > 40;
-        if (touched) {
-            if (hold) {
-                if (_now > hold + 3000) {
-                    prevState = state;
-                    state = 0;
-                    nextState = NR_STATE + 1;
-                    hold = _now;
-                    lastChange = _now;
-                }
-            }
-            else {
-                if (state >= NR_STATE) {
-                    nextState = prevState;
-                }
-                else {
-                    nextState = (state + 1) % NR_STATE;
-                    if (nextState == 0)
-                        nextState = 1;
-                }
-                state = 0;
-                lastTouch = millis();
-                lastChange = lastTouch;
-                hold = lastChange;
-            }
-        }
-        else {
-            hold = 0;
-        }
-    }
+void updateLights(void){
+  rem = loopCounter % 50;
+  i = loopCounter % NR_ANODE;
+  // turn all pins
+  PORTD = PORTD | cathodeBitsD | anodeBits;
+  PORTC = PORTC | cathodeBitsC | anodeBits;
+  PORTB = PORTB | cathodeBitsB;
+  // turn anode_pins[i] low - turn on P-MOSFET
+  PORTD = PORTD & ~(1 << (i + 3));
+  // turn cathode pins low if rem >= corresponding val
+  PORTD = PORTD & ~(((rem < val[i][6]) << cathodePinsD[0]) | ((rem < val[i][7]) << cathodePinsD[1]));
+  PORTB = PORTB & ~(((rem < val[i][4]) << cathodePinsB[0]) | ((rem < val[i][5]) << cathodePinsB[1]));
+  PORTC = PORTC & ~(((rem < val[i][0]) << cathodePinsC[0]) | ((rem < val[i][1]) << cathodePinsC[1]) | ((rem < val[i][2]) << cathodePinsC[2]) | ((rem < val[i][3]) << cathodePinsC[3]));
+  // wait a bit to see the led
+  //delay(1);
+  now = millis();
+  loopCounter++;
 }
 
-void setup() {
-  // put your setup code here, to run once:
-    
+void selectMode(mode_t mode){
+  switch (mode) {
+    case RED_ROWS:{
+      redRows();
+    } break;
+    case ORANGE_ROWS:{
+      orangeRows();
+    } break;
+    case GREEN_ROWS:{
+      greenRows();
+    } break;
+    case MULTI_ROWS:{
+      multiRows();
+    } break;
+    case RANDOM_ROWS:{
+      randRows();
+    } break;
+    case GREEN_COLUMNS:{
+      greenCols();
+    } break;
+    case ORANGE_COLUMNS:{
+      orangeCols();
+    } break;
+    case RED_COLUMNS:{
+      redCols();
+    } break;
+    case MULTI_COLUMNS:{
+      multiCols();
+    } break;
+    case RANDOM_FADE:{
+      randFade();
+    } break;
+    case SLEEP:{
+      rest();
+    } break;
+    default:{
+      randFlash();
+    } break;
+  }
+}
+
+ChristmasTree::ChristmasTree(){
+  pinMode(13, OUTPUT);
+  randomSeed(analogRead(A5));
+
   // set all PORTD pins to output
   DDRD = DDRD | B11111111;
   // set all PORTC pins to output
@@ -446,94 +465,42 @@ void setup() {
   DDRB = DDRB | B00111111;
   // set all pins to low
   PORTD = PORTD & B00000000;
-  PORTC = PORTC & B00000001; 
+  PORTC = PORTC & B00000001;
   PORTB = PORTB & B11000000;
 
   then = millis();
   now = millis();
-  
-  // set up timer interrupt for the touch button
-  Timer1.initialize(100000);
-  Timer1.attachInterrupt(getTouch);
-
-  randomSeed(analogRead(A1));
 }
 
-void loop() {
-  // put your main code here, to run repeatedly:
-  static int i = 0;
-  // this loop should be at least 300 Hz
-  // I used an infinite while loop, because there is a slight overhead
-  // between each iteration of the loop() function
-  while (1) {
-      rem = loopCounter % 50;
-      i = loopCounter % NR_ANODE;
-      // turn all pins
-      PORTD = PORTD | cathodeBitsD | anodeBits;
-      PORTC = PORTC | cathodeBitsC | anodeBits;
-      PORTB = PORTB | cathodeBitsB;
-      // turn anode_pins[i] low - turn on P-MOSFET
-      PORTD = PORTD & ~(1 << i + 3);
-      // turn cathode pins low if rem >= corresponding val
-      PORTD = PORTD & ~(((rem < val[i][6]) << cathodePinsD[0]) | ((rem < val[i][7]) << cathodePinsD[1]));
-      PORTB = PORTB & ~(((rem < val[i][4]) << cathodePinsB[0]) | ((rem < val[i][5]) << cathodePinsB[1]));
-      PORTC = PORTC & ~(((rem < val[i][0]) << cathodePinsC[0]) | ((rem < val[i][1]) << cathodePinsC[1]) | ((rem < val[i][2]) << cathodePinsC[2]) | ((rem < val[i][3]) << cathodePinsC[3]));
-      // wait a bit to see the led
-      //delay(1);
-      now = millis();
-      // check if enough time has elapsed to automatically change the state
-      if ((now > lastChange + autoChangeDelay) && state != NR_STATE) {
-          state = 0;
-          nextState = random(1, NR_STATE);
-          lastChange = now;
+bool ChristmasTree::WasTouched(){
+  bool retval = this->touched;
+  this->touched = false;
+  return retval;
+}
+
+mode_t ChristmasTree::GetRandomMode(){
+  return (mode_t)random(1, NR_STATES);
+}
+
+void ChristmasTree::Run(mode_t mode, unsigned long duration_ms){
+  unsigned long runtime = now + duration_ms;
+  unsigned long touchtime = now + 100;
+  if(mode != this->prevMode){
+    zero();
+  }
+  this->prevMode = mode;
+  while(now < runtime){ // run for a specified time
+    // handle touch
+    if(now > touchtime){
+      if(getTouch() != 0){
+        digitalWrite(13, !digitalRead(13));
+        this->touched = true;
+        break;
       }
-      // check if enough time has elapsed to go to sleep
-      if ((now > lastTouch + timeout) && state != NR_STATE) {
-          nextState = NR_STATE;
-          prevState = state;
-          state = 0;
-      }
-      switch (state)  {
-          case 0:
-              zero(nextState);
-              break;
-          case 1:
-              redRows();
-              break;
-          case 2:
-              greenRows();
-              break;
-          case 3:
-              orangeRows();
-              break;
-          case 4:
-              multiRows();
-              break;
-          case 5:
-              randRows();
-              break;
-          case 6:
-              redCols();
-              break;
-          case 7:
-              greenCols();
-              break;
-          case 8:
-              orangeCols();
-              break;
-          case 9:
-              multiCols();
-              break;
-          case 10:
-              randFade();
-              break;
-          case NR_STATE:
-              rest();
-              break;
-          case NR_STATE + 1:
-              randFlash();
-              break;
-      }
-      loopCounter++;      
-  }    
+      touchtime = now + 100;
+    }
+    // set lights according to mode
+    selectMode(mode);
+    updateLights();
+  }
 }
