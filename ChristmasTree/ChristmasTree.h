@@ -24,11 +24,17 @@ class ChristmasTree {
 public:
   ChristmasTree();
 
-  void Run(mode_t mode, unsigned long duration_ms);
+  void Run(unsigned long duration_ms);
   bool WasTouched();
+  bool IsSleeping();
+  void SetMode(mode_t mode);
+  void SetRandomMode();
+  void WakeUp();
+  void GoToSleep();
   mode_t GetRandomMode();
 protected:
   mode_t prevMode = UNDEFINED;
+  mode_t mode = UNDEFINED;
   bool touched = false;
 };
 

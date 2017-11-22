@@ -30,25 +30,25 @@ mode_t mode;
 
 void setup() {
   // select a random active mode
-  mode = tree.GetRandomMode();
+  tree.WakeUp();
 }
 
 void loop() {
   // Run the christmas lights in the christmas tree for a duration of 10 seconds
-  tree.Run(mode, 10000); // will end sooner if touch is detected
+  tree.Run(10000); // will end sooner if touch is detected
 
   // if touch detected: toggle between sleep mode and active modes
   // if not touched, randomly select a new active mode
   if(tree.WasTouched()){
-    if(mode == SLEEP){
-      mode = tree.GetRandomMode();
+    if(tree.IsSleeping()){
+      tree.WakeUp();
     }
     else{
-      mode = SLEEP;
+      tree.GoToSleep();
     }
   }
   else{
-    mode = tree.GetRandomMode();
+    tree.SetRandomMode();
   }
 
 }

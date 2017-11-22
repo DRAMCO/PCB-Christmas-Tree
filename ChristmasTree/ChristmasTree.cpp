@@ -478,14 +478,34 @@ bool ChristmasTree::WasTouched(){
   return retval;
 }
 
+bool ChristmasTree::IsSleeping(){
+  return (this->mode == SLEEP);
+}
+
 mode_t ChristmasTree::GetRandomMode(){
   return (mode_t)random(1, NR_STATES);
 }
 
-void ChristmasTree::Run(mode_t mode, unsigned long duration_ms){
+void ChristmasTree::SetMode(mode_t mode){
+  this->mode = mode;
+}
+
+void ChristmasTree::GoToSleep(){
+  this->mode = SLEEP;
+}
+
+void ChristmasTree::WakeUp(){
+  this->mode = this->GetRandomMode();
+}
+
+void ChristmasTree::SetRandomMode(){
+  this->WakeUp();
+}
+
+void ChristmasTree::Run(unsigned long duration_ms){
   unsigned long runtime = now + duration_ms;
   unsigned long touchtime = now + 100;
-  if(mode != this->prevMode){
+  if(this->mode != this->prevMode){
     zero();
   }
   this->prevMode = mode;
